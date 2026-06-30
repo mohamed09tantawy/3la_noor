@@ -30,11 +30,18 @@ DEFAULT_WIRDS = [
     "سنة الظهر البعدية ركعتان",
 ]
 
-# الخيارات الافتراضية (أداء / قضاء / غرامة) — قابلة للتعديل بالكامل من لوحة الـ owner
+# مجموعة الخيارات الافتراضية (أداء / قضاء / غرامة) — تُنشأ تلقائياً أول مرة
+DEFAULT_GROUP_NAME = "افتراضية (أداء/قضاء/غرامة)"
 DEFAULT_STATUS_OPTIONS = [
     {"code": "ada2",    "label": "أداء",   "value": "0",  "color": "#28a745", "order_num": 0},
     {"code": "qadaa",   "label": "قضاء",   "value": "0",  "color": "#ffc107", "order_num": 1},
     {"code": "gharama", "label": "غرامة",  "value": "20", "color": "#dc3545", "order_num": 2},
+]
+
+# المراحل الدراسية المتاحة عند تسجيل ولي الأمر
+SCHOOL_STAGES = [
+    {"code": "prep",      "label": "إعدادي"},
+    {"code": "secondary", "label": "ثانوي"},
 ]
 
 
@@ -93,7 +100,17 @@ def init_db():
             role TEXT NOT NULL DEFAULT 'parent',
             parent_name TEXT DEFAULT '',
             phone TEXT DEFAULT '',
-            child_name TEXT DEFAULT ''
+            child_name TEXT DEFAULT '',
+            school_stage TEXT DEFAULT ''
+        )
+    """)
+
+    conn.run("""
+        CREATE TABLE IF NOT EXISTS status_groups (
+            id SERIAL PRIMARY KEY,
+            name TEXT NOT NULL,
+            order_num INTEGER NOT NULL DEFAULT 0,
+            active INTEGER NOT NULL DEFAULT 1
         )
     """)
 
@@ -102,7 +119,8 @@ def init_db():
             id SERIAL PRIMARY KEY,
             name TEXT NOT NULL,
             order_num INTEGER NOT NULL DEFAULT 0,
-            active INTEGER NOT NULL DEFAULT 1
+            active INTEGER NOT NULL DEFAULT 1,
+            group_id INTEGER
         )
     """)
 
@@ -120,14 +138,30 @@ def init_db():
     conn.run("""
         CREATE TABLE IF NOT EXISTS status_options (
             id SERIAL PRIMARY KEY,
-            code TEXT UNIQUE NOT NULL,
+            group_id INTEGER NOT NULL,
+            code TEXT NOT NULL,
             label TEXT NOT NULL,
             value TEXT NOT NULL DEFAULT '0',
             color TEXT NOT NULL DEFAULT '#888888',
             order_num INTEGER NOT NULL DEFAULT 0,
-            active INTEGER NOT NULL DEFAULT 1
+            active INTEGER NOT NULL DEFAULT 1,
+            UNIQUE(group_id, code)
         )
     """)
+
+    # ترقية: لو الجداول كانت موجودة قبل كده بهيكل قديم (wird_id مباشرة)
+    try:
+        conn.run("ALTER TABLE wirds ADD COLUMN IF NOT EXISTS group_id INTEGER")
+    except Exception:
+        pass
+    try:
+        conn.run("ALTER TABLE status_options ADD COLUMN IF NOT EXISTS group_id INTEGER")
+    except Exception:
+        pass
+    try:
+        conn.run("ALTER TABLE users ADD COLUMN IF NOT EXISTS school_stage TEXT DEFAULT ''")
+    except Exception:
+        pass
 
     conn.run("""
         CREATE TABLE IF NOT EXISTS site_settings (
@@ -173,14 +207,23 @@ def init_db():
         for i, w in enumerate(DEFAULT_WIRDS):
             qrun(conn, "INSERT INTO wirds (name, order_num) VALUES (:p1, :p2)", (w, i))
 
-    # خيارات الحالة الافتراضية
-    r = qone(conn, "SELECT COUNT(*) as cnt FROM status_options")
+    # مجموعة الخيارات الافتراضية — تُنشأ مرة واحدة فقط
+    default_group = qone(conn, "SELECT id FROM status_groups WHERE name=:p1", (DEFAULT_GROUP_NAME,))
+    if not default_group:
+        qrun(conn, "INSERT INTO status_groups (name, order_num) VALUES (:p1, 0)", (DEFAULT_GROUP_NAME,))
+        default_group = qone(conn, "SELECT id FROM status_groups WHERE name=:p1", (DEFAULT_GROUP_NAME,))
+    default_group_id = default_group["id"]
+
+    r = qone(conn, "SELECT COUNT(*) as cnt FROM status_options WHERE group_id=:p1", (default_group_id,))
     if r and r["cnt"] == 0:
         for opt in DEFAULT_STATUS_OPTIONS:
             qrun(conn, """
-                INSERT INTO status_options (code, label, value, color, order_num)
-                VALUES (:p1, :p2, :p3, :p4, :p5)
-            """, (opt["code"], opt["label"], opt["value"], opt["color"], opt["order_num"]))
+                INSERT INTO status_options (group_id, code, label, value, color, order_num)
+                VALUES (:p1, :p2, :p3, :p4, :p5, :p6)
+            """, (default_group_id, opt["code"], opt["label"], opt["value"], opt["color"], opt["order_num"]))
+
+    # أي ورد من غير مجموعة (سواء جديد أو من ترقية قديمة) يتربط بالمجموعة الافتراضية
+    qrun(conn, "UPDATE wirds SET group_id=:p1 WHERE group_id IS NULL", (default_group_id,))
 
     # إعدادات الموقع
     r = qone(conn, "SELECT COUNT(*) as cnt FROM site_settings")
@@ -269,8 +312,23 @@ def get_period_dates(settings):
         ed = sd
     return sd, ed
 
-def get_status_options(conn):
-    return qall(conn, "SELECT * FROM status_options WHERE active=1 ORDER BY order_num")
+def get_status_groups(conn):
+    return qall(conn, "SELECT * FROM status_groups WHERE active=1 ORDER BY order_num")
+
+def get_group_options(conn, group_id):
+    return qall(conn, "SELECT * FROM status_options WHERE active=1 AND group_id=:p1 ORDER BY order_num", (group_id,))
+
+def get_wirds_with_options(conn):
+    """يرجع كل الأوراد، كل ورد معاه خياراته الخاصة (حسب المجموعة المربوط بيها)"""
+    wirds = qall(conn, "SELECT * FROM wirds WHERE active=1 ORDER BY order_num")
+    groups_cache = {}
+    for w in wirds:
+        gid = w.get("group_id")
+        if gid not in groups_cache:
+            groups_cache[gid] = qall(conn,
+                "SELECT * FROM status_options WHERE active=1 AND group_id=:p1 ORDER BY order_num", (gid,))
+        w["options"] = groups_cache[gid]
+    return wirds
 
 def inject_globals():
     """يُستخدم لحقن إعدادات الموقع في كل الصفحات تلقائياً"""
@@ -324,15 +382,18 @@ def register():
     settings = get_site_settings(conn)
 
     if request.method == "POST":
-        parent_name = request.form.get("parent_name", "").strip()
-        phone       = request.form.get("phone", "").strip()
-        child_name  = request.form.get("child_name", "").strip()
-        username    = request.form.get("username", "").strip()
-        password    = request.form.get("password", "")
-        password2   = request.form.get("password2", "")
+        parent_name  = request.form.get("parent_name", "").strip()
+        phone        = request.form.get("phone", "").strip()
+        child_name   = request.form.get("child_name", "").strip()
+        school_stage = request.form.get("school_stage", "").strip()
+        username     = request.form.get("username", "").strip()
+        password     = request.form.get("password", "")
+        password2    = request.form.get("password2", "")
 
-        if not all([parent_name, phone, child_name, username, password]):
-            flash("من فضلك املأ كل الحقول", "error")
+        valid_stages = {s["code"] for s in SCHOOL_STAGES}
+
+        if not all([parent_name, phone, child_name, username, password]) or school_stage not in valid_stages:
+            flash("من فضلك املأ كل الحقول واختار المرحلة الدراسية", "error")
         elif password != password2:
             flash("كلمة السر غير متطابقة", "error")
         elif len(password) < 4:
@@ -340,9 +401,9 @@ def register():
         else:
             try:
                 qrun(conn, """
-                    INSERT INTO users (username, password, plain_password, role, parent_name, phone, child_name)
-                    VALUES (:p1, :p2, :p3, 'parent', :p4, :p5, :p6)
-                """, (username, generate_password_hash(password), password, parent_name, phone, child_name))
+                    INSERT INTO users (username, password, plain_password, role, parent_name, phone, child_name, school_stage)
+                    VALUES (:p1, :p2, :p3, 'parent', :p4, :p5, :p6, :p7)
+                """, (username, generate_password_hash(password), password, parent_name, phone, child_name, school_stage))
                 flash("تم إنشاء الحساب بنجاح! يمكنك تسجيل الدخول الآن ✅", "success")
                 conn.close()
                 return redirect(url_for("login"))
@@ -350,7 +411,7 @@ def register():
                 flash("اسم المستخدم ده مستخدم بالفعل، اختار اسم تاني", "error")
 
     conn.close()
-    return render_template("register.html", settings=settings)
+    return render_template("register.html", settings=settings, school_stages=SCHOOL_STAGES)
 
 
 @app.route("/logout")
@@ -373,7 +434,6 @@ def parent_dashboard():
     settings = get_site_settings(conn)
     START_DATE, END_DATE = get_period_dates(settings)
     period_days = get_period_days(START_DATE, END_DATE)
-    options  = get_status_options(conn)
 
     selected_str = request.args.get("date", "")
     try:
@@ -383,7 +443,13 @@ def parent_dashboard():
     except ValueError:
         selected_date = max(START_DATE, min(today, END_DATE))
 
-    wirds = qall(conn, "SELECT * FROM wirds WHERE active=1 ORDER BY order_num")
+    wirds = get_wirds_with_options(conn)
+    # كل أكواد الحالة الموجودة في أي مجموعة (لاستخدامها في الإحصائيات وألوانها)
+    all_options = qall(conn, "SELECT * FROM status_options WHERE active=1 ORDER BY order_num")
+    opt_by_code = {}
+    for o in all_options:
+        if o["code"] not in opt_by_code:
+            opt_by_code[o["code"]] = o
 
     if request.method == "POST":
         action = request.form.get("action", "save_wirds")
@@ -415,8 +481,8 @@ def parent_dashboard():
             except ValueError:
                 rec_date = selected_date
 
-            valid_codes = {o["code"] for o in options}
             for wird in wirds:
+                valid_codes = {o["code"] for o in wird["options"]}
                 status = request.form.get(f"wird_{wird['id']}")
                 if status in valid_codes:
                     qrun(conn, """
@@ -434,27 +500,31 @@ def parent_dashboard():
         (session["user_id"], selected_date.isoformat()))
     records_selected = {r["wird_id"]: r["status_code"] for r in records_rows}
 
-    opt_by_code = {o["code"]: o for o in options}
-
     stats = []
     for d in period_days:
         day_rows = qall(conn,
             "SELECT wird_id, status_code FROM records WHERE user_id=:p1 AND record_date=:p2",
             (session["user_id"], d.isoformat()))
         day_rec = {r["wird_id"]: r["status_code"] for r in day_rows}
-        counts = {o["code"]: 0 for o in options}
+        counts = {}
         for v in day_rec.values():
-            if v in counts:
-                counts[v] += 1
+            counts[v] = counts.get(v, 0) + 1
+        # عدد الأوراد اللي اتسجلت بحالة تعتبر "أداء" (أول خيار في مجموعتها) — لتقدير نسبة الإنجاز
+        done_as_first = 0
+        for w in wirds:
+            if w["options"]:
+                first_code = w["options"][0]["code"]
+                if day_rec.get(w["id"]) == first_code:
+                    done_as_first += 1
         stats.append({
             "date": d, "records": day_rec, "counts": counts,
+            "done_count": len(day_rec), "ada2_like": done_as_first,
             "missing": len(wirds) - len(day_rec),
         })
 
     conn.close()
     return render_template("parent_dashboard.html",
-                           settings=settings, wirds=wirds, options=options,
-                           opt_by_code=opt_by_code,
+                           settings=settings, wirds=wirds, opt_by_code=opt_by_code,
                            records_selected=records_selected,
                            selected_date=selected_date, today=today,
                            stats=stats, START_DATE=START_DATE, END_DATE=END_DATE)
@@ -471,10 +541,16 @@ def admin_dashboard():
     conn        = get_db()
     settings    = get_site_settings(conn)
     START_DATE, END_DATE = get_period_dates(settings)
-    options     = get_status_options(conn)
     users       = qall(conn, "SELECT * FROM users WHERE role='parent'")
-    wirds       = qall(conn, "SELECT * FROM wirds WHERE active=1 ORDER BY order_num")
+    wirds       = get_wirds_with_options(conn)
     period_days = get_period_days(START_DATE, END_DATE)
+
+    all_options = qall(conn, "SELECT * FROM status_options WHERE active=1 ORDER BY order_num")
+    opt_by_code = {}
+    for o in all_options:
+        if o["code"] not in opt_by_code:
+            opt_by_code[o["code"]] = o
+    stage_label = {s["code"]: s["label"] for s in SCHOOL_STAGES}
 
     report = []
     for user in users:
@@ -482,59 +558,60 @@ def admin_dashboard():
             "username": user["username"],
             "parent_name": user.get("parent_name") or user["username"],
             "child_name": user.get("child_name") or "—",
+            "school_stage_label": stage_label.get(user.get("school_stage"), "—"),
             "days": [],
         }
-        totals = {o["code"]: 0 for o in options}
+        totals = {}
         total_missing = 0
+        total_done = 0
         for d in period_days:
             rows = qall(conn,
                 "SELECT wird_id, status_code FROM records WHERE user_id=:p1 AND record_date=:p2",
                 (user["id"], d.isoformat()))
             day_rec = {r["wird_id"]: r["status_code"] for r in rows}
-            counts = {o["code"]: 0 for o in options}
+            counts = {}
             for v in day_rec.values():
-                if v in counts:
-                    counts[v] += 1
+                counts[v] = counts.get(v, 0) + 1
             missing = len(wirds) - len(day_rec)
-            for k in totals:
-                totals[k] += counts[k]
+            for k, v in counts.items():
+                totals[k] = totals.get(k, 0) + v
             total_missing += missing
+            total_done += len(day_rec)
             user_data["days"].append({"date": d, "records": day_rec, "counts": counts, "missing": missing})
 
         total_wirds = len(wirds) * len(period_days)
-        ada2_total = totals.get("ada2", 0)
         user_data["totals"] = totals
         user_data["total_missing"] = total_missing
-        user_data["completion_pct"] = round(ada2_total / total_wirds * 100) if total_wirds else 0
+        user_data["completion_pct"] = round(total_done / total_wirds * 100) if total_wirds else 0
         report.append(user_data)
 
     daily_reports = []
     for d in period_days:
-        day_data = {"date": d, "users": [], "totals": {o["code"]: 0 for o in options}, "total_missing": 0}
+        day_data = {"date": d, "users": [], "totals": {}, "total_missing": 0}
         for user in users:
             rows = qall(conn,
                 "SELECT wird_id, status_code FROM records WHERE user_id=:p1 AND record_date=:p2",
                 (user["id"], d.isoformat()))
             day_rec = {r["wird_id"]: r["status_code"] for r in rows}
-            counts = {o["code"]: 0 for o in options}
+            counts = {}
             for v in day_rec.values():
-                if v in counts:
-                    counts[v] += 1
+                counts[v] = counts.get(v, 0) + 1
             missing = len(wirds) - len(day_rec)
             day_data["users"].append({
                 "username": user["username"],
                 "parent_name": user.get("parent_name") or user["username"],
                 "child_name": user.get("child_name") or "—",
+                "school_stage_label": stage_label.get(user.get("school_stage"), "—"),
                 "records": day_rec, "counts": counts, "missing": missing,
             })
-            for k in day_data["totals"]:
-                day_data["totals"][k] += counts[k]
+            for k, v in counts.items():
+                day_data["totals"][k] = day_data["totals"].get(k, 0) + v
             day_data["total_missing"] += missing
         daily_reports.append(day_data)
 
     conn.close()
     return render_template("admin_dashboard.html",
-                           settings=settings, options=options,
+                           settings=settings, opt_by_code=opt_by_code,
                            report=report, daily_reports=daily_reports,
                            wirds=wirds, START_DATE=START_DATE, END_DATE=END_DATE)
 
@@ -604,18 +681,19 @@ def owner_dashboard():
 
         # ── إدارة المستخدمين ──
         elif action == "add_user":
-            uname = request.form.get("username", "").strip()
-            pw    = request.form.get("password", "")
-            role  = request.form.get("role", "parent")
-            pname = request.form.get("parent_name", "").strip()
-            phone = request.form.get("phone", "").strip()
-            cname = request.form.get("child_name", "").strip()
+            uname  = request.form.get("username", "").strip()
+            pw     = request.form.get("password", "")
+            role   = request.form.get("role", "parent")
+            pname  = request.form.get("parent_name", "").strip()
+            phone  = request.form.get("phone", "").strip()
+            cname  = request.form.get("child_name", "").strip()
+            stage  = request.form.get("school_stage", "").strip()
             if uname and pw and role in ("parent", "admin"):
                 try:
                     qrun(conn, """
-                        INSERT INTO users (username, password, plain_password, role, parent_name, phone, child_name)
-                        VALUES (:p1,:p2,:p3,:p4,:p5,:p6,:p7)
-                    """, (uname, generate_password_hash(pw), pw, role, pname, phone, cname))
+                        INSERT INTO users (username, password, plain_password, role, parent_name, phone, child_name, school_stage)
+                        VALUES (:p1,:p2,:p3,:p4,:p5,:p6,:p7,:p8)
+                    """, (uname, generate_password_hash(pw), pw, role, pname, phone, cname, stage))
                     flash(f"تم إضافة '{uname}' ✅", "success")
                 except Exception:
                     flash("الاسم ده موجود بالفعل", "error")
@@ -640,11 +718,14 @@ def owner_dashboard():
         # ── إدارة الأوراد ──
         elif action == "add_wird":
             wname = request.form.get("wird_name", "").strip()
-            if wname:
+            gid   = request.form.get("group_id", "").strip()
+            if wname and gid:
                 r  = qone(conn, "SELECT MAX(order_num) as mx FROM wirds")
                 mx = r["mx"] if r and r["mx"] is not None else 0
-                qrun(conn, "INSERT INTO wirds (name, order_num) VALUES (:p1,:p2)", (wname, mx + 1))
+                qrun(conn, "INSERT INTO wirds (name, order_num, group_id) VALUES (:p1,:p2,:p3)", (wname, mx + 1, gid))
                 flash("تم إضافة الورد ✅", "success")
+            else:
+                flash("اختار اسم الورد ومجموعة الخيارات", "error")
 
         elif action == "delete_wird":
             wid = request.form.get("wird_id")
@@ -654,24 +735,55 @@ def owner_dashboard():
         elif action == "edit_wird":
             wid   = request.form.get("wird_id")
             wname = request.form.get("wird_name", "").strip()
-            if wid and wname:
-                qrun(conn, "UPDATE wirds SET name=:p1 WHERE id=:p2", (wname, wid))
+            gid   = request.form.get("group_id", "").strip()
+            if wid and wname and gid:
+                qrun(conn, "UPDATE wirds SET name=:p1, group_id=:p2 WHERE id=:p3", (wname, gid, wid))
                 flash("تم تعديل الورد ✅", "success")
 
-        # ── إدارة خيارات الحالة (أداء/قضاء/غرامة) ──
+        # ── إدارة مجموعات الخيارات ──
+        elif action == "add_group":
+            gname = request.form.get("group_name", "").strip()
+            if gname:
+                r  = qone(conn, "SELECT MAX(order_num) as mx FROM status_groups")
+                mx = r["mx"] if r and r["mx"] is not None else 0
+                qrun(conn, "INSERT INTO status_groups (name, order_num) VALUES (:p1,:p2)", (gname, mx + 1))
+                flash(f"تم إنشاء مجموعة '{gname}' ✅ — دلوقتي ضيف لها خيارات", "success")
+
+        elif action == "rename_group":
+            gid   = request.form.get("group_id")
+            gname = request.form.get("group_name", "").strip()
+            if gid and gname:
+                qrun(conn, "UPDATE status_groups SET name=:p1 WHERE id=:p2", (gname, gid))
+                flash("تم تعديل اسم المجموعة ✅", "success")
+
+        elif action == "delete_group":
+            gid = request.form.get("group_id")
+            in_use = qone(conn, "SELECT COUNT(*) as cnt FROM wirds WHERE group_id=:p1 AND active=1", (gid,))
+            total_groups = qone(conn, "SELECT COUNT(*) as cnt FROM status_groups WHERE active=1")
+            if in_use and in_use["cnt"] > 0:
+                flash("مينفعش تحذف مجموعة مستخدمة في أوراد — غيّر مجموعة الأوراد دي الأول", "error")
+            elif total_groups and total_groups["cnt"] <= 1:
+                flash("لازم تفضل مجموعة واحدة على الأقل", "error")
+            else:
+                qrun(conn, "UPDATE status_groups SET active=0 WHERE id=:p1", (gid,))
+                qrun(conn, "UPDATE status_options SET active=0 WHERE group_id=:p1", (gid,))
+                flash("تم حذف المجموعة", "success")
+
+        # ── إدارة خيارات داخل مجموعة (أداء/قضاء/غرامة وغيرها) ──
         elif action == "add_status_option":
+            gid   = request.form.get("group_id", "").strip()
             label = request.form.get("status_label", "").strip()
             value = request.form.get("status_value", "0").strip()
             color = request.form.get("status_color", "#888888").strip()
-            if label:
-                code = "opt_" + str(abs(hash(label)) % 100000)
-                r  = qone(conn, "SELECT MAX(order_num) as mx FROM status_options")
+            if label and gid:
+                code = "opt_" + str(abs(hash(label + gid)) % 1000000)
+                r  = qone(conn, "SELECT MAX(order_num) as mx FROM status_options WHERE group_id=:p1", (gid,))
                 mx = r["mx"] if r and r["mx"] is not None else 0
                 try:
                     qrun(conn, """
-                        INSERT INTO status_options (code, label, value, color, order_num)
-                        VALUES (:p1,:p2,:p3,:p4,:p5)
-                    """, (code, label, value, color, mx + 1))
+                        INSERT INTO status_options (group_id, code, label, value, color, order_num)
+                        VALUES (:p1,:p2,:p3,:p4,:p5,:p6)
+                    """, (gid, code, label, value, color, mx + 1))
                     flash("تم إضافة الخيار ✅", "success")
                 except Exception:
                     flash("حصل خطأ، حاول تاني", "error")
@@ -689,23 +801,31 @@ def owner_dashboard():
 
         elif action == "delete_status_option":
             oid = request.form.get("option_id")
-            cnt = qone(conn, "SELECT COUNT(*) as cnt FROM status_options WHERE active=1")
-            if cnt and cnt["cnt"] > 1:
-                qrun(conn, "UPDATE status_options SET active=0 WHERE id=:p1", (oid,))
-                flash("تم حذف الخيار", "success")
-            else:
-                flash("لازم يفضل خيار واحد على الأقل", "error")
+            opt = qone(conn, "SELECT group_id FROM status_options WHERE id=:p1", (oid,))
+            if opt:
+                cnt = qone(conn, "SELECT COUNT(*) as cnt FROM status_options WHERE active=1 AND group_id=:p1",
+                           (opt["group_id"],))
+                if cnt and cnt["cnt"] > 1:
+                    qrun(conn, "UPDATE status_options SET active=0 WHERE id=:p1", (oid,))
+                    flash("تم حذف الخيار", "success")
+                else:
+                    flash("لازم يفضل خيار واحد على الأقل في كل مجموعة", "error")
 
         conn.close()
         return redirect(url_for("owner_dashboard"))
 
     settings = get_site_settings(conn)
-    options  = qall(conn, "SELECT * FROM status_options WHERE active=1 ORDER BY order_num")
+    groups   = get_status_groups(conn)
+    for g in groups:
+        g["options"] = get_group_options(conn, g["id"])
     users    = qall(conn, "SELECT * FROM users WHERE role != 'owner' ORDER BY role, username")
-    wirds    = qall(conn, "SELECT * FROM wirds WHERE active=1 ORDER BY order_num")
+    wirds    = qall(conn, "SELECT w.*, g.name as group_name FROM wirds w "
+                          "LEFT JOIN status_groups g ON w.group_id = g.id "
+                          "WHERE w.active=1 ORDER BY w.order_num")
     conn.close()
     return render_template("owner_dashboard.html",
-                           settings=settings, options=options, users=users, wirds=wirds)
+                           settings=settings, groups=groups, users=users, wirds=wirds,
+                           school_stages=SCHOOL_STAGES)
 
 
 if __name__ == "__main__":
