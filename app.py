@@ -13,8 +13,9 @@ app.config["MAX_CONTENT_LENGTH"] = 3 * 1024 * 1024  # 3MB max للوجو
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
-START_DATE = date(2026, 6, 27)
-END_DATE   = date(2026, 7, 3)
+# قيم افتراضية تُستخدم أول مرة فقط عند إنشاء قاعدة البيانات
+DEFAULT_START_DATE = date(2026, 6, 27)
+DEFAULT_END_DATE   = date(2026, 7, 3)
 
 DEFAULT_WIRDS = [
     "سنة المغرب البعدية ركعتان",
@@ -134,9 +135,20 @@ def init_db():
             site_name TEXT NOT NULL DEFAULT 'متابعة الأوراد',
             logo_data TEXT DEFAULT '',
             welcome_message TEXT DEFAULT 'نشكركم على متابعتكم ومتابعة أبنائكم في أداء الأوراد اليومية',
+            start_date TEXT DEFAULT '',
+            end_date TEXT DEFAULT '',
             CHECK (id = 1)
         )
     """)
+
+    for col, coltype in [
+        ("start_date", "TEXT DEFAULT ''"),
+        ("end_date", "TEXT DEFAULT ''"),
+    ]:
+        try:
+            conn.run(f"ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS {col} {coltype}")
+        except Exception:
+            pass
 
     # ترقية: أعمدة جديدة لو الجدول كان موجود من قبل بدون الأعمدة دي
     for col, coltype in [
@@ -173,7 +185,17 @@ def init_db():
     # إعدادات الموقع
     r = qone(conn, "SELECT COUNT(*) as cnt FROM site_settings")
     if r and r["cnt"] == 0:
-        qrun(conn, "INSERT INTO site_settings (id, site_name) VALUES (1, 'متابعة الأوراد')")
+        qrun(conn, """
+            INSERT INTO site_settings (id, site_name, start_date, end_date)
+            VALUES (1, 'متابعة الأوراد', :p1, :p2)
+        """, (DEFAULT_START_DATE.isoformat(), DEFAULT_END_DATE.isoformat()))
+    else:
+        # لو الصف موجود بس التواريخ فاضية (ترقية من نسخة قديمة) املأها بالافتراضي
+        s = qone(conn, "SELECT start_date, end_date FROM site_settings WHERE id=1")
+        if s and (not s.get("start_date") or not s.get("end_date")):
+            qrun(conn, """
+                UPDATE site_settings SET start_date=:p1, end_date=:p2 WHERE id=1
+            """, (DEFAULT_START_DATE.isoformat(), DEFAULT_END_DATE.isoformat()))
 
     # حساب الـ owner
     r = qone(conn, "SELECT COUNT(*) as cnt FROM users WHERE role='owner'")
@@ -214,10 +236,10 @@ def role_required(*roles):
 # Helpers
 # ────────────────────────────────────────────────────────────────
 
-def get_period_days():
+def get_period_days(start_d, end_d):
     days = []
-    current = START_DATE
-    while current <= END_DATE:
+    current = start_d
+    while current <= end_d:
         days.append(current)
         current += timedelta(days=1)
     return days
@@ -225,8 +247,27 @@ def get_period_days():
 def get_site_settings(conn):
     s = qone(conn, "SELECT * FROM site_settings WHERE id=1")
     if not s:
-        s = {"site_name": "متابعة الأوراد", "logo_data": "", "welcome_message": ""}
+        s = {"site_name": "متابعة الأوراد", "logo_data": "", "welcome_message": "",
+             "start_date": DEFAULT_START_DATE.isoformat(), "end_date": DEFAULT_END_DATE.isoformat()}
+    if not s.get("start_date"):
+        s["start_date"] = DEFAULT_START_DATE.isoformat()
+    if not s.get("end_date"):
+        s["end_date"] = DEFAULT_END_DATE.isoformat()
     return s
+
+def get_period_dates(settings):
+    """يحول التواريخ المخزّنة كنص إلى date objects، مع رجوع آمن للقيم الافتراضية"""
+    try:
+        sd = date.fromisoformat(settings["start_date"])
+    except Exception:
+        sd = DEFAULT_START_DATE
+    try:
+        ed = date.fromisoformat(settings["end_date"])
+    except Exception:
+        ed = DEFAULT_END_DATE
+    if ed < sd:
+        ed = sd
+    return sd, ed
 
 def get_status_options(conn):
     return qall(conn, "SELECT * FROM status_options WHERE active=1 ORDER BY order_num")
@@ -326,11 +367,12 @@ def logout():
 @login_required
 @role_required("parent")
 def parent_dashboard():
-    today       = date.today()
-    period_days = get_period_days()
+    today = date.today()
 
     conn     = get_db()
     settings = get_site_settings(conn)
+    START_DATE, END_DATE = get_period_dates(settings)
+    period_days = get_period_days(START_DATE, END_DATE)
     options  = get_status_options(conn)
 
     selected_str = request.args.get("date", "")
@@ -428,10 +470,11 @@ def parent_dashboard():
 def admin_dashboard():
     conn        = get_db()
     settings    = get_site_settings(conn)
+    START_DATE, END_DATE = get_period_dates(settings)
     options     = get_status_options(conn)
     users       = qall(conn, "SELECT * FROM users WHERE role='parent'")
     wirds       = qall(conn, "SELECT * FROM wirds WHERE active=1 ORDER BY order_num")
-    period_days = get_period_days()
+    period_days = get_period_days(START_DATE, END_DATE)
 
     report = []
     for user in users:
@@ -541,6 +584,23 @@ def owner_dashboard():
         elif action == "remove_logo":
             qrun(conn, "UPDATE site_settings SET logo_data='' WHERE id=1")
             flash("تم حذف اللوجو", "success")
+
+        elif action == "update_period":
+            new_start = request.form.get("start_date", "").strip()
+            new_end   = request.form.get("end_date", "").strip()
+            try:
+                sd = date.fromisoformat(new_start)
+                ed = date.fromisoformat(new_end)
+                if ed < sd:
+                    flash("تاريخ النهاية لازم يكون بعد أو يساوي تاريخ البداية", "error")
+                elif (ed - sd).days > 90:
+                    flash("الفترة طويلة جداً، الحد الأقصى 90 يوم", "error")
+                else:
+                    qrun(conn, "UPDATE site_settings SET start_date=:p1, end_date=:p2 WHERE id=1",
+                         (sd.isoformat(), ed.isoformat()))
+                    flash(f"تم تحديث الفترة الزمنية: {sd.strftime('%d/%m/%Y')} – {ed.strftime('%d/%m/%Y')} ✅", "success")
+            except ValueError:
+                flash("التاريخ غير صحيح", "error")
 
         # ── إدارة المستخدمين ──
         elif action == "add_user":
