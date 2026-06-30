@@ -149,7 +149,7 @@ def init_db():
         )
     """)
 
-    # ترقية: لو الجداول كانت موجودة قبل كده بهيكل قديم (wird_id مباشرة)
+    # ترقية: لو الجداول كانت موجودة قبل كده بهيكل قديم (wird_id مباشرة، أو code بمفرده unique)
     try:
         conn.run("ALTER TABLE wirds ADD COLUMN IF NOT EXISTS group_id INTEGER")
     except Exception:
@@ -162,6 +162,31 @@ def init_db():
         conn.run("ALTER TABLE users ADD COLUMN IF NOT EXISTS school_stage TEXT DEFAULT ''")
     except Exception:
         pass
+
+    # إزالة أي قيود uniqueness قديمة على status_options كانت من نسخ سابقة (code لوحده، أو wird_id+code)
+    old_constraints = qall(conn, """
+        SELECT conname FROM pg_constraint
+        WHERE conrelid = 'status_options'::regclass AND contype = 'u'
+    """)
+    for c in old_constraints:
+        cname = c["conname"]
+        if cname != "status_options_group_id_code_key":
+            try:
+                conn.run(f'ALTER TABLE status_options DROP CONSTRAINT "{cname}"')
+            except Exception:
+                pass
+
+    # تأكد من وجود القيد الصحيح (group_id, code)
+    has_correct = qone(conn, """
+        SELECT COUNT(*) as cnt FROM pg_constraint
+        WHERE conrelid = 'status_options'::regclass
+          AND contype = 'u' AND conname = 'status_options_group_id_code_key'
+    """)
+    if not has_correct or has_correct["cnt"] == 0:
+        try:
+            conn.run("ALTER TABLE status_options ADD CONSTRAINT status_options_group_id_code_key UNIQUE (group_id, code)")
+        except Exception:
+            pass
 
     conn.run("""
         CREATE TABLE IF NOT EXISTS site_settings (
@@ -220,6 +245,7 @@ def init_db():
             qrun(conn, """
                 INSERT INTO status_options (group_id, code, label, value, color, order_num)
                 VALUES (:p1, :p2, :p3, :p4, :p5, :p6)
+                ON CONFLICT (group_id, code) DO NOTHING
             """, (default_group_id, opt["code"], opt["label"], opt["value"], opt["color"], opt["order_num"]))
 
     # أي ورد من غير مجموعة (سواء جديد أو من ترقية قديمة) يتربط بالمجموعة الافتراضية
