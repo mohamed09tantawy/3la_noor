@@ -122,11 +122,10 @@
     <div class="week-grid">
       {% for day in stats %}
         {% set total = wirds|length %}
-        {% set done_count = day.counts.values()|sum %}
-        {% set ada2_count = day.counts.get('ada2', 0) %}
-        {% set pct = ((ada2_count / total) * 100)|int if total > 0 else 0 %}
+        {% set done_count = day.done_count %}
+        {% set pct = ((day.ada2_like / total) * 100)|int if total > 0 else 0 %}
         {% if done_count == 0 %}{% set cc = 'empty' %}
-        {% elif ada2_count == total %}{% set cc = 'complete' %}
+        {% elif day.missing == 0 and day.ada2_like == total %}{% set cc = 'complete' %}
         {% else %}{% set cc = 'partial' %}{% endif %}
         <a href="?date={{ day.date.strftime('%Y-%m-%d') }}"
            class="week-day-card {{ cc }}{% if day.date == selected_date %} selected{% endif %}{% if day.date == today %} today-card{% endif %}">
@@ -135,9 +134,9 @@
           {% if done_count > 0 %}
             <div class="wdc-pct">{{ pct }}%</div>
             <div class="wdc-stats">
-              {% for opt in options %}
-                {% if day.counts.get(opt.code, 0) > 0 %}
-                  <span style="color:{{ opt.color }}">{{ day.counts.get(opt.code, 0) }}</span>
+              {% for code, cnt in day.counts.items() %}
+                {% if cnt > 0 and opt_by_code.get(code) %}
+                  <span style="color:{{ opt_by_code[code].color }}">{{ cnt }}</span>
                 {% endif %}
               {% endfor %}
             </div>
@@ -165,7 +164,7 @@
       <div class="wird-row">
         <span class="wird-name">{{ loop.index }}. {{ wird.name }}</span>
         <div class="options">
-          {% for opt in options %}
+          {% for opt in wird.options %}
           <label class="opt-label" style="
             {% if records_selected.get(wird.id) == opt.code %}
               background:{{ opt.color }}22; border-color:{{ opt.color }}; color:{{ opt.color }}; font-weight:700;
@@ -176,6 +175,9 @@
             {{ opt.label }}{% if opt.value and opt.value != '0' %} ({{ opt.value }}){% endif %}
           </label>
           {% endfor %}
+          {% if not wird.options %}
+            <span style="font-size:12px;color:#c00;">⚠️ الورد ده مالوش خيارات — كلّم صاحب النظام</span>
+          {% endif %}
         </div>
       </div>
       {% endfor %}
@@ -183,6 +185,7 @@
     </form>
   </div>
 </div>
+
 
 <script>
 function openModal()  { document.getElementById('pwModal').classList.add('open'); }

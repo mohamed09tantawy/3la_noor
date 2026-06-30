@@ -87,15 +87,20 @@
     <div class="card">
       <h2>📊 إحصائيات الفترة كاملة ({{ START_DATE.strftime('%d/%m') }} – {{ END_DATE.strftime('%d/%m/%Y') }})</h2>
       <div class="summary-grid">
-        {% for opt in options %}
-        <div class="stat-box" style="border-color:{{ opt.color }}33;">
-          <div class="stat-num" style="color:{{ opt.color }}">
-            {% set total = 0 %}
-            {% for u in report %}{% set total = total + u.totals.get(opt.code, 0) %}{% endfor %}
-            {{ total }}
+        {% set grand_totals = {} %}
+        {% for u in report %}
+          {% for code, cnt in u.totals.items() %}
+            {% if grand_totals.update({code: grand_totals.get(code, 0) + cnt}) %}{% endif %}
+          {% endfor %}
+        {% endfor %}
+        {% for code, cnt in grand_totals.items() %}
+          {% set opt = opt_by_code.get(code) %}
+          {% if opt %}
+          <div class="stat-box" style="border-color:{{ opt.color }}33;">
+            <div class="stat-num" style="color:{{ opt.color }}">{{ cnt }}</div>
+            <div class="stat-lbl">{{ opt.label }}</div>
           </div>
-          <div class="stat-lbl">{{ opt.label }}</div>
-        </div>
+          {% endif %}
         {% endfor %}
         <div class="stat-box">
           <div class="stat-num" style="color:#aaa">{{ report|sum(attribute='total_missing') }}</div>
@@ -110,11 +115,12 @@
       <div class="user-summary-card">
         <div class="user-header">
           <span class="user-name">👤 {{ user.parent_name }}</span>
-          <span class="child-tag">📿 {{ user.child_name }}</span>
+          <span class="child-tag">📿 {{ user.child_name }} · {{ user.school_stage_label }}</span>
           <div class="badges">
-            {% for opt in options %}
-              {% if user.totals.get(opt.code, 0) > 0 %}
-                <span class="badge" style="background:{{ opt.color }}">{{ opt.label }}: {{ user.totals.get(opt.code, 0) }}</span>
+            {% for code, cnt in user.totals.items() %}
+              {% set opt = opt_by_code.get(code) %}
+              {% if opt and cnt > 0 %}
+                <span class="badge" style="background:{{ opt.color }}">{{ opt.label }}: {{ cnt }}</span>
               {% endif %}
             {% endfor %}
             <span class="badge pct">{{ user.completion_pct }}%</span>
@@ -129,16 +135,15 @@
         <div class="days-mini">
           {% for day in user.days %}
             {% set total_w = wirds|length %}
-            {% set done = day.counts.values()|sum %}
-            {% set ada2 = day.counts.get('ada2', 0) %}
+            {% set done = day.records|length %}
             {% if done == 0 %}{% set dc = 'empty' %}
-            {% elif ada2 == total_w %}{% set dc = 'complete' %}
+            {% elif day.missing == 0 %}{% set dc = 'complete' %}
             {% else %}{% set dc = 'partial' %}{% endif %}
             <div class="day-mini {{ dc }}">
               <div class="dm-name">{{ day.date.strftime('%a')|replace('Mon','الاثنين')|replace('Tue','الثلاثاء')|replace('Wed','الأربعاء')|replace('Thu','الخميس')|replace('Fri','الجمعة')|replace('Sat','السبت')|replace('Sun','الأحد') }}</div>
               <div class="dm-date">{{ day.date.strftime('%d/%m') }}</div>
               {% if done > 0 %}
-                <div style="font-weight:700;margin-top:3px;">{{ ada2 }}/{{ total_w }}</div>
+                <div style="font-weight:700;margin-top:3px;">{{ done }}/{{ total_w }}</div>
               {% else %}
                 <div style="color:#ccc;font-size:12px;margin-top:4px;">—</div>
               {% endif %}
@@ -171,11 +176,14 @@
         <h2>📅 {{ day_report.date.strftime('%A')|replace('Monday','الاثنين')|replace('Tuesday','الثلاثاء')|replace('Wednesday','الأربعاء')|replace('Thursday','الخميس')|replace('Friday','الجمعة')|replace('Saturday','السبت')|replace('Sunday','الأحد') }} {{ day_report.date.strftime('%d/%m/%Y') }}</h2>
 
         <div class="summary-grid" style="margin-bottom:16px;">
-          {% for opt in options %}
-          <div class="stat-box">
-            <div class="stat-num" style="color:{{ opt.color }}">{{ day_report.totals.get(opt.code, 0) }}</div>
-            <div class="stat-lbl">{{ opt.label }}</div>
-          </div>
+          {% for code, cnt in day_report.totals.items() %}
+            {% set opt = opt_by_code.get(code) %}
+            {% if opt %}
+            <div class="stat-box">
+              <div class="stat-num" style="color:{{ opt.color }}">{{ cnt }}</div>
+              <div class="stat-lbl">{{ opt.label }}</div>
+            </div>
+            {% endif %}
           {% endfor %}
         </div>
 
@@ -195,11 +203,11 @@
               <tr>
                 <td class="user-cell">
                   <strong>{{ ud.parent_name }}</strong>
-                  <span>📿 {{ ud.child_name }}</span>
+                  <span>📿 {{ ud.child_name }} · {{ ud.school_stage_label }}</span>
                 </td>
                 {% for wird in wirds %}
                   {% set st = ud.records.get(wird.id, '') %}
-                  {% set opt_match = options|selectattr('code','equalto', st)|first %}
+                  {% set opt_match = opt_by_code.get(st) %}
                   <td>
                     {% if opt_match %}
                       <span style="color:{{ opt_match.color }};font-size:16px;">●</span>
@@ -209,9 +217,10 @@
                   </td>
                 {% endfor %}
                 <td style="font-size:11px;">
-                  {% for opt in options %}
-                    {% if ud.counts.get(opt.code, 0) > 0 %}
-                      <span style="color:{{ opt.color }};font-weight:700;">{{ ud.counts.get(opt.code, 0) }}</span>
+                  {% for code, cnt in ud.counts.items() %}
+                    {% set opt = opt_by_code.get(code) %}
+                    {% if opt and cnt > 0 %}
+                      <span style="color:{{ opt.color }};font-weight:700;">{{ cnt }}</span>
                     {% endif %}
                   {% endfor %}
                 </td>

@@ -126,7 +126,7 @@
     <button class="tab-btn active" onclick="showTab('site')">🎨 الموقع واللوجو</button>
     <button class="tab-btn" onclick="showTab('users')">👥 المستخدمون</button>
     <button class="tab-btn" onclick="showTab('wirds')">📋 الأوراد</button>
-    <button class="tab-btn" onclick="showTab('status')">🏷️ خيارات التسجيل</button>
+    <button class="tab-btn" onclick="showTab('status')">🏷️ مجموعات الخيارات</button>
   </div>
 
   <!-- ═══════════ تبويب الموقع واللوجو ═══════════ -->
@@ -212,6 +212,11 @@
           <input type="text" name="parent_name" placeholder="اسم ولي الأمر">
           <input type="tel" name="phone" placeholder="رقم التليفون">
           <input type="text" name="child_name" placeholder="اسم الابن">
+          <select name="school_stage">
+            {% for stage in school_stages %}
+            <option value="{{ stage.code }}">{{ stage.label }}</option>
+            {% endfor %}
+          </select>
         </div>
         <button type="submit" class="btn btn-primary">إضافة</button>
       </form>
@@ -249,7 +254,10 @@
                 {% if user.role == 'parent' %}
                   <div class="child-info">
                     {{ user.parent_name or '—' }}<br>
-                    📿 {{ user.child_name or '—' }} · 📱 {{ user.phone or '—' }}
+                    📿 {{ user.child_name or '—' }} · 📱 {{ user.phone or '—' }}<br>
+                    {% for stage in school_stages %}
+                      {% if stage.code == user.school_stage %}🎓 {{ stage.label }}{% endif %}
+                    {% endfor %}
                   </div>
                 {% else %}
                   <span class="child-info">—</span>
@@ -282,22 +290,44 @@
   <!-- ═══════════ تبويب الأوراد ═══════════ -->
   <div id="tab-wirds" class="tab-section">
     <div class="card">
-      <h2>📋 الأوراد ({{ wirds|length }})</h2>
-      <form method="POST" style="margin-bottom:16px;">
+      <h2>➕ إضافة ورد جديد</h2>
+      {% if groups %}
+      <form method="POST">
         <input type="hidden" name="action" value="add_wird">
         <div class="form-row">
-          <input type="text" name="wird_name" placeholder="اسم الورد الجديد" style="flex:1;">
-          <button type="submit" class="btn btn-primary">➕ إضافة ورد</button>
+          <input type="text" name="wird_name" placeholder="اسم الورد الجديد" style="flex:2;">
+          <select name="group_id" style="flex:1;">
+            {% for g in groups %}
+            <option value="{{ g.id }}">{{ g.name }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="btn btn-primary">➕ إضافة</button>
         </div>
       </form>
+      <p style="font-size:12px;color:#888;">مجموعة الخيارات هي اللي بتحدد إيه الاختيارات اللي هتظهر لولي الأمر عند تسجيل الورد ده (تقدر تديرها من تبويب "مجموعات الخيارات")</p>
+      {% else %}
+        <p style="color:#c00;font-size:13px;">لازم تعمل مجموعة خيارات واحدة على الأقل الأول من تبويب "مجموعات الخيارات"</p>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2>📋 الأوراد الحالية ({{ wirds|length }})</h2>
       {% for wird in wirds %}
       <div class="wird-item">
-        <span class="wird-name">{{ loop.index }}. {{ wird.name }}</span>
+        <span class="wird-name">
+          {{ loop.index }}. {{ wird.name }}
+          <span style="font-size:11px;color:#1a6e4a;background:#e8f4ee;padding:2px 8px;border-radius:5px;margin-right:6px;">{{ wird.group_name or 'بدون مجموعة' }}</span>
+        </span>
         <div class="edit-form">
           <form method="POST" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
             <input type="hidden" name="action" value="edit_wird">
             <input type="hidden" name="wird_id" value="{{ wird.id }}">
             <input type="text" name="wird_name" value="{{ wird.name }}">
+            <select name="group_id">
+              {% for g in groups %}
+              <option value="{{ g.id }}" {% if g.id == wird.group_id %}selected{% endif %}>{{ g.name }}</option>
+              {% endfor %}
+            </select>
             <button type="submit" class="btn btn-edit">✏️</button>
           </form>
           <form method="POST" onsubmit="return confirm('حذف الورد؟')">
@@ -311,26 +341,53 @@
     </div>
   </div>
 
-  <!-- ═══════════ تبويب خيارات التسجيل ═══════════ -->
+  <!-- ═══════════ تبويب مجموعات الخيارات ═══════════ -->
   <div id="tab-status" class="tab-section">
     <div class="card">
-      <h2>🏷️ إضافة خيار جديد</h2>
+      <h2>➕ مجموعة خيارات جديدة</h2>
+      <p style="font-size:12px;color:#888;margin-bottom:12px;">كل ورد ممكن يكون ليه خيارات مختلفة — مثلاً ورد "الصلاة" يكون له (أداء/قضاء/غرامة)، وورد "حضور الدرس" يكون له (حضر/غاب). اعمل مجموعة لكل نوع.</p>
       <form method="POST">
-        <input type="hidden" name="action" value="add_status_option">
+        <input type="hidden" name="action" value="add_group">
         <div class="form-row">
-          <input type="text" name="status_label" placeholder="اسم الخيار (مثال: تأجيل)" required>
-          <input type="text" name="status_value" placeholder="القيمة (مثال: 0 أو 10 جنيه)" value="0">
-          <input type="color" name="status_color" value="#888888" style="width:50px;padding:2px;">
-          <button type="submit" class="btn btn-primary">➕ إضافة</button>
+          <input type="text" name="group_name" placeholder="اسم المجموعة (مثال: حضور وغياب)" style="flex:1;">
+          <button type="submit" class="btn btn-primary">➕ إنشاء مجموعة</button>
         </div>
       </form>
-      <p style="font-size:12px;color:#888;">القيمة بتستخدم لو الخيار ده عليه غرامة أو مكافأة — اكتب "0" لو مفيش قيمة</p>
     </div>
 
+    {% for g in groups %}
     <div class="card">
-      <h2>🏷️ الخيارات الحالية ({{ options|length }})</h2>
-      <p style="font-size:12px;color:#888;margin-bottom:14px;">دي الخيارات اللي هتظهر لولي الأمر عند تسجيل كل ورد (زي أداء / قضاء / غرامة)</p>
-      {% for opt in options %}
+      <h2>
+        🏷️ {{ g.name }}
+        <span style="font-size:11px;color:#888;font-weight:400;">({{ g.options|length }} خيار)</span>
+      </h2>
+
+      <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+        <form method="POST" style="display:flex;gap:6px;flex:1;min-width:200px;">
+          <input type="hidden" name="action" value="rename_group">
+          <input type="hidden" name="group_id" value="{{ g.id }}">
+          <input type="text" name="group_name" value="{{ g.name }}" style="flex:1;">
+          <button type="submit" class="btn btn-edit">✏️ تعديل الاسم</button>
+        </form>
+        <form method="POST" onsubmit="return confirm('حذف مجموعة {{ g.name }}؟ (لازم متبقاش مستخدمة في أي ورد)')">
+          <input type="hidden" name="action" value="delete_group">
+          <input type="hidden" name="group_id" value="{{ g.id }}">
+          <button type="submit" class="btn btn-danger">🗑 حذف المجموعة</button>
+        </form>
+      </div>
+
+      <form method="POST" style="margin-bottom:14px;">
+        <input type="hidden" name="action" value="add_status_option">
+        <input type="hidden" name="group_id" value="{{ g.id }}">
+        <div class="form-row">
+          <input type="text" name="status_label" placeholder="اسم الخيار (مثال: حضر)" required>
+          <input type="text" name="status_value" placeholder="القيمة (0 لو مفيش)" value="0">
+          <input type="color" name="status_color" value="#888888" style="width:50px;padding:2px;">
+          <button type="submit" class="btn btn-primary">➕ إضافة خيار</button>
+        </div>
+      </form>
+
+      {% for opt in g.options %}
       <div class="status-item">
         <div class="status-color-dot" style="background:{{ opt.color }}"></div>
         <div class="status-info">
@@ -352,7 +409,17 @@
         </form>
       </div>
       {% endfor %}
+      {% if not g.options %}
+        <p style="text-align:center;color:#888;padding:14px;font-size:13px;">مفيش خيارات في المجموعة دي لسه — ضيف خيار من الفورم فوق</p>
+      {% endif %}
     </div>
+    {% endfor %}
+
+    {% if not groups %}
+      <div class="card">
+        <p style="text-align:center;color:#888;padding:20px;">مفيش مجموعات لسه — اعمل مجموعة من الفورم فوق</p>
+      </div>
+    {% endif %}
   </div>
 
 </div>

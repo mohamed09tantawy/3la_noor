@@ -19,6 +19,11 @@
   input:focus { outline: none; border-color: #1a6e4a; }
   .section-title { font-size: 12px; color: #1a6e4a; font-weight: 700; margin: 4px 0 10px; text-transform: uppercase; letter-spacing: 0.5px; }
   .divider { height: 1px; background: #f0f0f0; margin: 16px 0; }
+  .stage-options { display: flex; gap: 10px; margin-bottom: 14px; }
+  .stage-card { flex: 1; position: relative; }
+  .stage-card input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+  .stage-card label { display: block; text-align: center; padding: 14px 10px; border: 2px solid #e0e0e0; border-radius: 10px; font-size: 14px; font-weight: 600; color: #555; cursor: pointer; transition: all 0.15s; margin: 0; }
+  .stage-card input:checked + label { border-color: #1a6e4a; background: #e8f4ee; color: #1a6e4a; }
   .btn { width: 100%; padding: 13px; background: #1a6e4a; color: #fff; border: none; border-radius: 10px; font-size: 16px; font-weight: 700; cursor: pointer; transition: background 0.2s; margin-top: 6px; }
   .btn:hover { background: #228a5c; }
   .flash { padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; font-size: 14px; }
@@ -57,6 +62,16 @@
     <div class="section-title">بيانات ابنك</div>
     <label>اسم الابن</label>
     <input type="text" name="child_name" placeholder="مثال: محمد أحمد" required>
+
+    <label>المرحلة الدراسية</label>
+    <div class="stage-options">
+      {% for stage in school_stages %}
+      <div class="stage-card">
+        <input type="radio" name="school_stage" id="stage_{{ stage.code }}" value="{{ stage.code }}" required>
+        <label for="stage_{{ stage.code }}">{{ stage.label }}</label>
+      </div>
+      {% endfor %}
+    </div>
 
     <div class="divider"></div>
 
