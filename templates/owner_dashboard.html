@@ -132,6 +132,25 @@
   <!-- ═══════════ تبويب الموقع واللوجو ═══════════ -->
   <div id="tab-site" class="tab-section active">
     <div class="card">
+      <h2>📅 الفترة الزمنية للمتابعة</h2>
+      <p style="font-size:12px;color:#888;margin-bottom:14px;">حدد بداية ونهاية فترة تسجيل الأوراد — هتظهر للجميع حسب الفترة دي</p>
+      <form method="POST">
+        <input type="hidden" name="action" value="update_period">
+        <div class="form-row">
+          <div style="flex:1;min-width:150px;">
+            <label class="field-label">تاريخ البداية</label>
+            <input type="date" name="start_date" value="{{ settings.start_date }}" style="width:100%;">
+          </div>
+          <div style="flex:1;min-width:150px;">
+            <label class="field-label">تاريخ النهاية</label>
+            <input type="date" name="end_date" value="{{ settings.end_date }}" style="width:100%;">
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;padding:13px;">💾 حفظ الفترة الزمنية</button>
+      </form>
+    </div>
+
+    <div class="card">
       <h2>🎨 هوية الموقع</h2>
 
       <div class="logo-preview">
