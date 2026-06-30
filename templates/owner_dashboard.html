@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>لوحة التحكم — {{ settings.site_name }}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: #f2f6f3; }
+  .header { background: linear-gradient(135deg, #4a148c, #1a1a2e); color: #fff; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+  .header-brand { display: flex; align-items: center; gap: 10px; }
+  .header-logo { width: 36px; height: 36px; border-radius: 8px; object-fit: cover; }
+  .header h1 { font-size: 17px; }
+  .header a { color: #ce93d8; font-size: 13px; text-decoration: none; }
+  .container { max-width: 900px; margin: 24px auto; padding: 0 16px; }
+
+  .tabs { display: flex; gap: 6px; margin-bottom: 20px; flex-wrap: wrap; overflow-x: auto; }
+  .tab-btn { padding: 9px 16px; border-radius: 9px; border: 2px solid #e0e0e0; background: #fff; font-size: 13px; cursor: pointer; transition: all 0.15s; color: #555; font-weight: 600; white-space: nowrap; }
+  .tab-btn.active { background: #4a148c; color: #fff; border-color: #4a148c; }
+  .tab-section { display: none; }
+  .tab-section.active { display: block; }
+
+  .card { background: #fff; border-radius: 14px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+  .card h2 { font-size: 16px; color: #1a1a2e; margin-bottom: 16px; border-bottom: 2px solid #f2f6f3; padding-bottom: 10px; }
+  .flash { padding: 10px 14px; border-radius: 8px; margin-bottom: 14px; font-size: 14px; }
+  .flash.success { background: #d4edda; color: #155724; }
+  .flash.error   { background: #f8d7da; color: #721c24; }
+  input[type=text], input[type=password], input[type=tel], select, textarea { padding: 10px 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px; direction: rtl; font-family: inherit; }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: #4a148c; }
+  .form-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+  .form-row input, .form-row select { flex: 1; min-width: 130px; }
+  .btn { padding: 10px 18px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: 0.2s; white-space: nowrap; }
+  .btn-primary { background: #4a148c; color: #fff; }
+  .btn-primary:hover { background: #6a1cbc; }
+  .btn-danger  { background: #dc3545; color: #fff; }
+  .btn-danger:hover { background: #b02a37; }
+  .btn-edit    { background: #ffc107; color: #333; }
+  .btn-edit:hover { background: #e0a800; }
+  .btn-pw { background: #1a6e4a; color: #fff; }
+  .btn-pw:hover { background: #228a5c; }
+
+  /* اللوجو */
+  .logo-preview { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; padding: 16px; background: #f8f7fb; border-radius: 10px; }
+  .logo-preview img { width: 72px; height: 72px; border-radius: 12px; object-fit: cover; border: 2px solid #e0e0e0; }
+  .logo-preview .no-logo { width: 72px; height: 72px; border-radius: 12px; border: 2px dashed #ccc; display: flex; align-items: center; justify-content: center; font-size: 28px; color: #aaa; }
+  .field-label { display: block; font-size: 13px; color: #555; margin-bottom: 5px; font-weight: 600; }
+  .field-group { margin-bottom: 16px; }
+  .file-input-wrap { position: relative; }
+  textarea { width: 100%; min-height: 70px; resize: vertical; }
+
+  /* جدول المستخدمين */
+  .users-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .users-table th { background: #f2f6f3; padding: 9px 10px; text-align: right; font-size: 12px; color: #555; }
+  .users-table td { padding: 9px 10px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+  .users-table tr:hover { background: #fafafa; }
+  .role-badge { font-size: 11px; padding: 3px 9px; border-radius: 5px; font-weight: 700; }
+  .role-admin  { background: #e3f2fd; color: #1565c0; }
+  .role-parent { background: #e8f5e9; color: #2e7d32; }
+  .pw-text { font-family: monospace; font-size: 12px; background: #f5f5f5; padding: 3px 8px; border-radius: 5px; }
+  .pw-hidden { filter: blur(4px); cursor: pointer; transition: filter 0.2s; }
+  .pw-hidden:hover { filter: none; }
+  .child-info { font-size: 11px; color: #888; }
+
+  /* خيارات الحالة */
+  .status-item { display: flex; align-items: center; gap: 10px; padding: 12px; border: 1px solid #f0f0f0; border-radius: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+  .status-color-dot { width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0; }
+  .status-info { flex: 1; min-width: 100px; }
+  .status-info .s-label { font-weight: 700; font-size: 14px; }
+  .status-info .s-value { font-size: 12px; color: #888; }
+  .status-edit-form { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .status-edit-form input[type=text] { width: 90px; }
+  .status-edit-form input[type=color] { width: 36px; height: 36px; padding: 2px; border: 2px solid #e0e0e0; border-radius: 8px; cursor: pointer; }
+
+  /* الأوراد */
+  .wird-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border: 1px solid #f0f0f0; border-radius: 8px; margin-bottom: 8px; gap: 10px; flex-wrap: wrap; }
+  .wird-item .wird-name { flex: 1; font-size: 14px; }
+  .edit-form { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .edit-form input { min-width: 180px; }
+
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; align-items: center; justify-content: center; padding: 16px; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: #fff; border-radius: 16px; padding: 28px; width: 340px; max-width: 95vw; }
+  .modal h3 { font-size: 17px; color: #1a1a2e; margin-bottom: 6px; }
+  .modal .modal-username { font-size: 13px; color: #888; margin-bottom: 16px; }
+  .modal label { display: block; font-size: 13px; color: #555; margin-bottom: 5px; font-weight: 600; }
+  .modal input { width: 100%; padding: 10px 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px; margin-bottom: 16px; direction: ltr; }
+  .modal-btns { display: flex; gap: 10px; }
+  .modal-btns button { flex: 1; padding: 11px; border-radius: 9px; font-size: 14px; font-weight: 700; cursor: pointer; border: none; }
+  .btn-confirm { background: #4a148c; color: #fff; }
+  .btn-cancel  { background: #f0f0f0; color: #555; }
+</style>
+</head>
+<body>
+
+<div class="modal-overlay" id="pwModal">
+  <div class="modal">
+    <h3>🔑 تغيير كلمة السر</h3>
+    <p class="modal-username" id="modalUsername"></p>
+    <form method="POST">
+      <input type="hidden" name="action" value="reset_password">
+      <input type="hidden" name="user_id" id="modalUserId">
+      <label>كلمة السر الجديدة</label>
+      <input type="text" name="new_password" id="modalNewPw" required minlength="4">
+      <div class="modal-btns">
+        <button type="submit" class="btn-confirm">حفظ</button>
+        <button type="button" class="btn-cancel" onclick="closeModal()">إلغاء</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="header">
+  <div class="header-brand">
+    {% if settings.logo_data %}<img src="{{ settings.logo_data }}" class="header-logo" alt="logo">{% endif %}
+    <h1>👑 لوحة تحكم {{ settings.site_name }}</h1>
+  </div>
+  <a href="/logout">خروج ↩</a>
+</div>
+
+<div class="container">
+  {% for cat, msg in get_flashed_messages(with_categories=True) %}
+    <div class="flash {{ cat }}">{{ msg }}</div>
+  {% endfor %}
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="showTab('site')">🎨 الموقع واللوجو</button>
+    <button class="tab-btn" onclick="showTab('users')">👥 المستخدمون</button>
+    <button class="tab-btn" onclick="showTab('wirds')">📋 الأوراد</button>
+    <button class="tab-btn" onclick="showTab('status')">🏷️ خيارات التسجيل</button>
+  </div>
+
+  <!-- ═══════════ تبويب الموقع واللوجو ═══════════ -->
+  <div id="tab-site" class="tab-section active">
+    <div class="card">
+      <h2>🎨 هوية الموقع</h2>
+
+      <div class="logo-preview">
+        {% if settings.logo_data %}
+          <img src="{{ settings.logo_data }}" alt="logo">
+        {% else %}
+          <div class="no-logo">🌙</div>
+        {% endif %}
+        <div>
+          <div style="font-weight:700;font-size:14px;">{{ settings.site_name }}</div>
+          <div style="font-size:12px;color:#888;margin-top:3px;">اللوجو الحالي — هيظهر في كل الصفحات</div>
+          {% if settings.logo_data %}
+          <form method="POST" style="margin-top:8px;" onsubmit="return confirm('حذف اللوجو؟')">
+            <input type="hidden" name="action" value="remove_logo">
+            <button type="submit" class="btn btn-danger" style="font-size:12px;padding:5px 12px;">🗑 حذف اللوجو</button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+
+      <form method="POST" enctype="multipart/form-data">
+        <input type="hidden" name="action" value="update_site">
+
+        <div class="field-group">
+          <label class="field-label">اسم الموقع</label>
+          <input type="text" name="site_name" value="{{ settings.site_name }}" style="width:100%;">
+        </div>
+
+        <div class="field-group">
+          <label class="field-label">رفع لوجو جديد (PNG / JPG / SVG)</label>
+          <input type="file" name="logo_file" accept=".png,.jpg,.jpeg,.svg,.webp">
+        </div>
+
+        <div class="field-group">
+          <label class="field-label">رسالة الترحيب لأولياء الأمور (تظهر في صفحتهم)</label>
+          <textarea name="welcome_message">{{ settings.welcome_message }}</textarea>
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width:100%;padding:13px;">💾 حفظ التعديلات</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ═══════════ تبويب المستخدمين ═══════════ -->
+  <div id="tab-users" class="tab-section">
+    <div class="card">
+      <h2>➕ إضافة مستخدم جديد</h2>
+      <form method="POST">
+        <input type="hidden" name="action" value="add_user">
+        <div class="form-row">
+          <select name="role" id="roleSelect" onchange="toggleParentFields()" style="flex:0 0 130px;">
+            <option value="parent">ولي أمر</option>
+            <option value="admin">أدمن</option>
+          </select>
+          <input type="text" name="username" placeholder="اسم المستخدم" required>
+          <input type="text" name="password" placeholder="كلمة السر" required>
+        </div>
+        <div class="form-row" id="parentFields">
+          <input type="text" name="parent_name" placeholder="اسم ولي الأمر">
+          <input type="tel" name="phone" placeholder="رقم التليفون">
+          <input type="text" name="child_name" placeholder="اسم الابن">
+        </div>
+        <button type="submit" class="btn btn-primary">إضافة</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>👥 المستخدمون ({{ users|length }})</h2>
+      {% if users %}
+      <div style="overflow-x:auto;">
+        <table class="users-table">
+          <thead>
+            <tr>
+              <th>اسم الدخول</th>
+              <th>كلمة السر</th>
+              <th>الدور</th>
+              <th>التفاصيل</th>
+              <th>إجراءات</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for user in users %}
+            <tr>
+              <td><strong>{{ user.username }}</strong></td>
+              <td>
+                <span class="pw-text pw-hidden" onclick="this.classList.toggle('pw-hidden')" title="اضغط للإظهار">
+                  {{ user.plain_password if user.plain_password else '——' }}
+                </span>
+              </td>
+              <td>
+                <span class="role-badge {{ 'role-admin' if user.role == 'admin' else 'role-parent' }}">
+                  {{ 'أدمن' if user.role == 'admin' else 'ولي أمر' }}
+                </span>
+              </td>
+              <td>
+                {% if user.role == 'parent' %}
+                  <div class="child-info">
+                    {{ user.parent_name or '—' }}<br>
+                    📿 {{ user.child_name or '—' }} · 📱 {{ user.phone or '—' }}
+                  </div>
+                {% else %}
+                  <span class="child-info">—</span>
+                {% endif %}
+              </td>
+              <td>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                  <button class="btn btn-pw"
+                          onclick="openModal({{ user.id }}, '{{ user.username }}', '{{ user.plain_password }}')">
+                    🔑
+                  </button>
+                  <form method="POST" onsubmit="return confirm('حذف {{ user.username }}؟')">
+                    <input type="hidden" name="action" value="delete_user">
+                    <input type="hidden" name="user_id" value="{{ user.id }}">
+                    <button type="submit" class="btn btn-danger">🗑</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+        <p style="text-align:center;color:#888;padding:20px;">مفيش مستخدمين لسه</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- ═══════════ تبويب الأوراد ═══════════ -->
+  <div id="tab-wirds" class="tab-section">
+    <div class="card">
+      <h2>📋 الأوراد ({{ wirds|length }})</h2>
+      <form method="POST" style="margin-bottom:16px;">
+        <input type="hidden" name="action" value="add_wird">
+        <div class="form-row">
+          <input type="text" name="wird_name" placeholder="اسم الورد الجديد" style="flex:1;">
+          <button type="submit" class="btn btn-primary">➕ إضافة ورد</button>
+        </div>
+      </form>
+      {% for wird in wirds %}
+      <div class="wird-item">
+        <span class="wird-name">{{ loop.index }}. {{ wird.name }}</span>
+        <div class="edit-form">
+          <form method="POST" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+            <input type="hidden" name="action" value="edit_wird">
+            <input type="hidden" name="wird_id" value="{{ wird.id }}">
+            <input type="text" name="wird_name" value="{{ wird.name }}">
+            <button type="submit" class="btn btn-edit">✏️</button>
+          </form>
+          <form method="POST" onsubmit="return confirm('حذف الورد؟')">
+            <input type="hidden" name="action" value="delete_wird">
+            <input type="hidden" name="wird_id" value="{{ wird.id }}">
+            <button type="submit" class="btn btn-danger">🗑</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- ═══════════ تبويب خيارات التسجيل ═══════════ -->
+  <div id="tab-status" class="tab-section">
+    <div class="card">
+      <h2>🏷️ إضافة خيار جديد</h2>
+      <form method="POST">
+        <input type="hidden" name="action" value="add_status_option">
+        <div class="form-row">
+          <input type="text" name="status_label" placeholder="اسم الخيار (مثال: تأجيل)" required>
+          <input type="text" name="status_value" placeholder="القيمة (مثال: 0 أو 10 جنيه)" value="0">
+          <input type="color" name="status_color" value="#888888" style="width:50px;padding:2px;">
+          <button type="submit" class="btn btn-primary">➕ إضافة</button>
+        </div>
+      </form>
+      <p style="font-size:12px;color:#888;">القيمة بتستخدم لو الخيار ده عليه غرامة أو مكافأة — اكتب "0" لو مفيش قيمة</p>
+    </div>
+
+    <div class="card">
+      <h2>🏷️ الخيارات الحالية ({{ options|length }})</h2>
+      <p style="font-size:12px;color:#888;margin-bottom:14px;">دي الخيارات اللي هتظهر لولي الأمر عند تسجيل كل ورد (زي أداء / قضاء / غرامة)</p>
+      {% for opt in options %}
+      <div class="status-item">
+        <div class="status-color-dot" style="background:{{ opt.color }}"></div>
+        <div class="status-info">
+          <div class="s-label">{{ opt.label }}</div>
+          <div class="s-value">القيمة: {{ opt.value }}</div>
+        </div>
+        <form method="POST" class="status-edit-form">
+          <input type="hidden" name="action" value="edit_status_option">
+          <input type="hidden" name="option_id" value="{{ opt.id }}">
+          <input type="text" name="status_label" value="{{ opt.label }}" placeholder="الاسم">
+          <input type="text" name="status_value" value="{{ opt.value }}" placeholder="القيمة">
+          <input type="color" name="status_color" value="{{ opt.color }}">
+          <button type="submit" class="btn btn-edit">✏️</button>
+        </form>
+        <form method="POST" onsubmit="return confirm('حذف الخيار {{ opt.label }}؟')">
+          <input type="hidden" name="action" value="delete_status_option">
+          <input type="hidden" name="option_id" value="{{ opt.id }}">
+          <button type="submit" class="btn btn-danger">🗑</button>
+        </form>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+</div>
+
+<script>
+function showTab(tab) {
+  document.querySelectorAll('.tab-section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  event.target.classList.add('active');
+}
+function toggleParentFields() {
+  const role = document.getElementById('roleSelect').value;
+  document.getElementById('parentFields').style.display = (role === 'parent') ? 'flex' : 'none';
+}
+function openModal(uid, uname, pw) {
+  document.getElementById('modalUserId').value = uid;
+  document.getElementById('modalUsername').textContent = 'المستخدم: ' + uname;
+  document.getElementById('modalNewPw').value = pw || '';
+  document.getElementById('pwModal').classList.add('open');
+}
+function closeModal() {
+  document.getElementById('pwModal').classList.remove('open');
+}
+document.getElementById('pwModal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+</script>
+</body>
+</html>

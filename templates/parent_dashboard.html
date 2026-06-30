@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ settings.site_name }}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: #f2f6f3; min-height: 100vh; }
+  .header { background: linear-gradient(135deg, #1a3a2e, #0f2419); color: #fff; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+  .header-brand { display: flex; align-items: center; gap: 10px; }
+  .header-logo { width: 36px; height: 36px; border-radius: 8px; object-fit: cover; }
+  .header h1 { font-size: 16px; }
+  .header-links { display: flex; gap: 14px; align-items: center; }
+  .header-links a { color: #aad4c0; font-size: 13px; text-decoration: none; }
+  .btn-pw { background: rgba(255,255,255,0.15); color: #fff; border: 1px solid rgba(255,255,255,0.3); padding: 5px 12px; border-radius: 7px; font-size: 13px; cursor: pointer; }
+  .btn-pw:hover { background: rgba(255,255,255,0.25); }
+  .container { max-width: 720px; margin: 24px auto; padding: 0 16px; }
+
+  .welcome-card {
+    background: linear-gradient(135deg, #1a6e4a, #228a5c);
+    color: #fff; border-radius: 16px; padding: 22px 24px; margin-bottom: 20px;
+  }
+  .welcome-card h2 { font-size: 19px; margin-bottom: 6px; }
+  .welcome-card p { font-size: 13.5px; opacity: 0.95; line-height: 1.6; }
+  .child-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(255,255,255,0.18); padding: 6px 14px; border-radius: 20px;
+    font-size: 13px; font-weight: 700; margin-top: 10px;
+  }
+
+  .flash { padding: 12px 16px; border-radius: 10px; margin-bottom: 16px; font-size: 14px; }
+  .flash.success { background: #d4edda; color: #155724; }
+  .flash.error   { background: #f8d7da; color: #721c24; }
+
+  .card { background: #fff; border-radius: 14px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+  .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; border-bottom: 2px solid #f2f6f3; padding-bottom: 10px; flex-wrap: wrap; gap: 8px; }
+  .card-header h2 { font-size: 16px; color: #1a3a2e; }
+  .selected-date-badge { background: #e8f4ee; color: #1a6e4a; padding: 4px 12px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+  .selected-date-badge.today { background: #d4edda; color: #155724; }
+
+  .week-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(85px, 1fr)); gap: 10px; }
+  .week-day-card { border-radius: 10px; padding: 10px 8px; text-align: center; border: 2px solid #e0e0e0; background: #fafafa; cursor: pointer; transition: all 0.15s; text-decoration: none; color: inherit; display: block; }
+  .week-day-card:hover { border-color: #1a6e4a; transform: translateY(-2px); }
+  .week-day-card.selected { border-color: #1a6e4a; background: #e8f4ee; }
+  .week-day-card.today-card { border-color: #28a745; }
+  .week-day-card.complete  { background: #d4edda; border-color: #28a745; }
+  .week-day-card.partial   { background: #fff9e6; border-color: #ffc107; }
+  .week-day-card.empty     { background: #f5f5f5; border-color: #ddd; }
+  .wdc-name { font-size: 12px; font-weight: 700; color: #333; }
+  .wdc-date { font-size: 10px; color: #888; margin: 2px 0; }
+  .wdc-pct  { font-size: 14px; font-weight: 700; color: #333; margin-top: 4px; }
+  .wdc-stats { font-size: 10px; margin-top: 4px; }
+
+  .wird-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #f5f5f5; gap: 10px; flex-wrap: wrap; }
+  .wird-name { flex: 1; font-size: 14px; color: #333; min-width: 150px; }
+  .options { display: flex; gap: 6px; flex-wrap: wrap; }
+  .opt-label { display: flex; align-items: center; gap: 4px; padding: 6px 10px; border-radius: 8px; border: 2px solid #e0e0e0; cursor: pointer; font-size: 12px; transition: all 0.15s; user-select: none; }
+  .opt-label input { display: none; }
+  .save-btn { width: 100%; padding: 14px; background: #1a6e4a; color: #fff; border: none; border-radius: 10px; font-size: 16px; font-weight: 700; cursor: pointer; transition: background 0.2s; margin-top: 8px; }
+  .save-btn:hover { background: #228a5c; }
+
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; align-items: center; justify-content: center; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: #fff; border-radius: 16px; padding: 28px; width: 340px; max-width: 95vw; }
+  .modal h3 { font-size: 17px; color: #1a3a2e; margin-bottom: 18px; }
+  .modal label { display: block; font-size: 13px; color: #555; margin-bottom: 5px; font-weight: 600; }
+  .modal input { width: 100%; padding: 10px 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px; margin-bottom: 14px; direction: ltr; }
+  .modal input:focus { outline: none; border-color: #1a6e4a; }
+  .modal-btns { display: flex; gap: 10px; }
+  .modal-btns button { flex: 1; padding: 11px; border-radius: 9px; font-size: 14px; font-weight: 700; cursor: pointer; border: none; }
+  .btn-confirm { background: #1a6e4a; color: #fff; }
+  .btn-cancel  { background: #f0f0f0; color: #555; }
+</style>
+</head>
+<body>
+
+<div class="modal-overlay" id="pwModal">
+  <div class="modal">
+    <h3>🔑 تغيير كلمة السر</h3>
+    <form method="POST">
+      <input type="hidden" name="action" value="change_password">
+      <label>كلمة السر الحالية</label>
+      <input type="password" name="old_password" required>
+      <label>كلمة السر الجديدة</label>
+      <input type="password" name="new_password" required minlength="4">
+      <label>تأكيد كلمة السر الجديدة</label>
+      <input type="password" name="new_password2" required minlength="4">
+      <div class="modal-btns">
+        <button type="submit" class="btn-confirm">حفظ</button>
+        <button type="button" class="btn-cancel" onclick="closeModal()">إلغاء</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="header">
+  <div class="header-brand">
+    {% if settings.logo_data %}<img src="{{ settings.logo_data }}" class="header-logo" alt="logo">{% endif %}
+    <h1>{{ settings.site_name }}</h1>
+  </div>
+  <div class="header-links">
+    <button class="btn-pw" onclick="openModal()">🔑 تغيير كلمة السر</button>
+    <a href="/logout">خروج ↩</a>
+  </div>
+</div>
+
+<div class="container">
+
+  <div class="welcome-card">
+    <h2>مرحبًا بك، {{ session.parent_name or session.username }} 👋</h2>
+    <p>{{ settings.welcome_message }}</p>
+    <div class="child-badge">📿 بتسجّل أوراد: {{ session.child_name or 'ابنك' }}</div>
+  </div>
+
+  {% for cat, msg in get_flashed_messages(with_categories=True) %}
+    <div class="flash {{ cat }}">{{ msg }}</div>
+  {% endfor %}
+
+  <div class="card">
+    <div class="card-header"><h2>📅 اختار اليوم</h2></div>
+    <div class="week-grid">
+      {% for day in stats %}
+        {% set total = wirds|length %}
+        {% set done_count = day.counts.values()|sum %}
+        {% set ada2_count = day.counts.get('ada2', 0) %}
+        {% set pct = ((ada2_count / total) * 100)|int if total > 0 else 0 %}
+        {% if done_count == 0 %}{% set cc = 'empty' %}
+        {% elif ada2_count == total %}{% set cc = 'complete' %}
+        {% else %}{% set cc = 'partial' %}{% endif %}
+        <a href="?date={{ day.date.strftime('%Y-%m-%d') }}"
+           class="week-day-card {{ cc }}{% if day.date == selected_date %} selected{% endif %}{% if day.date == today %} today-card{% endif %}">
+          <div class="wdc-name">{{ day.date.strftime('%A')|replace('Monday','الاثنين')|replace('Tuesday','الثلاثاء')|replace('Wednesday','الأربعاء')|replace('Thursday','الخميس')|replace('Friday','الجمعة')|replace('Saturday','السبت')|replace('Sunday','الأحد') }}</div>
+          <div class="wdc-date">{{ day.date.strftime('%d/%m') }}</div>
+          {% if done_count > 0 %}
+            <div class="wdc-pct">{{ pct }}%</div>
+            <div class="wdc-stats">
+              {% for opt in options %}
+                {% if day.counts.get(opt.code, 0) > 0 %}
+                  <span style="color:{{ opt.color }}">{{ day.counts.get(opt.code, 0) }}</span>
+                {% endif %}
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="wdc-pct" style="color:#ccc">—</div>
+          {% endif %}
+        </a>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h2>📝 تسجيل أوراد {{ session.child_name or '' }}</h2>
+      <span class="selected-date-badge {% if selected_date == today %}today{% endif %}">
+        {% if selected_date == today %}📍 اليوم — {% endif %}
+        {{ selected_date.strftime('%A')|replace('Monday','الاثنين')|replace('Tuesday','الثلاثاء')|replace('Wednesday','الأربعاء')|replace('Thursday','الخميس')|replace('Friday','الجمعة')|replace('Saturday','السبت')|replace('Sunday','الأحد') }}
+        {{ selected_date.strftime('%d/%m/%Y') }}
+      </span>
+    </div>
+    <form method="POST">
+      <input type="hidden" name="action" value="save_wirds">
+      <input type="hidden" name="record_date" value="{{ selected_date.strftime('%Y-%m-%d') }}">
+      {% for wird in wirds %}
+      <div class="wird-row">
+        <span class="wird-name">{{ loop.index }}. {{ wird.name }}</span>
+        <div class="options">
+          {% for opt in options %}
+          <label class="opt-label" style="
+            {% if records_selected.get(wird.id) == opt.code %}
+              background:{{ opt.color }}22; border-color:{{ opt.color }}; color:{{ opt.color }}; font-weight:700;
+            {% endif %}">
+            <input type="radio" name="wird_{{ wird.id }}" value="{{ opt.code }}"
+              {% if records_selected.get(wird.id) == opt.code %}checked{% endif %}
+              onclick="this.closest('.options').querySelectorAll('.opt-label').forEach(l=>{l.style.background='';l.style.borderColor='#e0e0e0';l.style.color='';l.style.fontWeight='400';}); this.closest('.opt-label').style.background='{{ opt.color }}22'; this.closest('.opt-label').style.borderColor='{{ opt.color }}'; this.closest('.opt-label').style.color='{{ opt.color }}'; this.closest('.opt-label').style.fontWeight='700';">
+            {{ opt.label }}{% if opt.value and opt.value != '0' %} ({{ opt.value }}){% endif %}
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+      <button type="submit" class="save-btn">💾 حفظ أوراد {{ selected_date.strftime('%d/%m') }}</button>
+    </form>
+  </div>
+</div>
+
+<script>
+function openModal()  { document.getElementById('pwModal').classList.add('open'); }
+function closeModal() { document.getElementById('pwModal').classList.remove('open'); }
+document.getElementById('pwModal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+</script>
+</body>
+</html>

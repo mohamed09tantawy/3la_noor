@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>تقرير الأدمن — {{ settings.site_name }}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: #f2f6f3; }
+  .header { background: linear-gradient(135deg, #1a6e4a, #0f2419); color: #fff; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+  .header-brand { display: flex; align-items: center; gap: 10px; }
+  .header-logo { width: 32px; height: 32px; border-radius: 7px; object-fit: cover; }
+  .header h1 { font-size: 16px; }
+  .header a { color: #aad4c0; font-size: 13px; text-decoration: none; }
+  .container { max-width: 980px; margin: 24px auto; padding: 0 16px; }
+
+  .view-tabs { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+  .view-tab { padding: 10px 20px; border-radius: 10px; border: 2px solid #e0e0e0; background: #fff; font-size: 14px; cursor: pointer; transition: all 0.15s; color: #555; font-weight: 600; }
+  .view-tab.active { background: #1a6e4a; color: #fff; border-color: #1a6e4a; }
+
+  .card { background: #fff; border-radius: 14px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+  .card h2 { font-size: 16px; color: #1a1a2e; margin-bottom: 16px; border-bottom: 2px solid #f2f6f3; padding-bottom: 10px; }
+
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .stat-box { background: #f8f9fa; border-radius: 10px; padding: 14px; text-align: center; border: 1px solid #e8e8e8; }
+  .stat-box .stat-num { font-size: 26px; font-weight: 700; }
+  .stat-box .stat-lbl { font-size: 12px; color: #666; margin-top: 4px; }
+
+  .user-summary-card { border: 1px solid #e8e8e8; border-radius: 12px; padding: 16px; margin-bottom: 14px; }
+  .user-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; flex-wrap: wrap; gap: 8px; }
+  .user-name { font-weight: 700; font-size: 15px; color: #1a1a2e; }
+  .child-tag { font-size: 12px; color: #1a6e4a; background: #e8f4ee; padding: 3px 10px; border-radius: 6px; font-weight: 600; }
+  .badges { display: flex; gap: 6px; flex-wrap: wrap; }
+  .badge { padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; color: #fff; }
+  .badge.pct { background: #1a56db; }
+  .progress-bar { height: 10px; background: #e0e0e0; border-radius: 5px; overflow: hidden; margin: 10px 0 12px; }
+  .progress-fill { height: 100%; border-radius: 5px; transition: width 0.5s; }
+
+  .days-mini { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-top: 10px; }
+  .day-mini { border-radius: 8px; padding: 6px 4px; text-align: center; font-size: 11px; border: 1px solid #e0e0e0; }
+  .day-mini .dm-name { font-weight: 600; color: #555; font-size: 10px; }
+  .day-mini .dm-date { color: #888; font-size: 10px; }
+  .day-mini.complete  { background: #d4edda; border-color: #28a745; }
+  .day-mini.partial   { background: #fff9e6; border-color: #ffc107; }
+  .day-mini.empty     { background: #f8f8f8; }
+
+  .day-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+  .day-tab { padding: 8px 14px; border-radius: 8px; border: 2px solid #e0e0e0; background: #fff; font-size: 12px; cursor: pointer; transition: all 0.15s; color: #555; text-align: center; }
+  .day-tab.active { background: #1a6e4a; color: #fff; border-color: #1a6e4a; }
+  .day-tab .dt-name { font-weight: 700; font-size: 12px; }
+  .day-tab .dt-date { font-size: 10px; opacity: 0.8; }
+
+  .daily-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .daily-table th { background: #f2f6f3; padding: 10px 8px; text-align: center; font-size: 12px; }
+  .daily-table th:first-child { text-align: right; }
+  .daily-table td { padding: 10px 8px; border-bottom: 1px solid #f5f5f5; text-align: center; vertical-align: middle; }
+  .daily-table td:first-child { text-align: right; }
+  .daily-table tr:hover { background: #fafafa; }
+  .user-cell strong { font-weight: 700; color: #1a1a2e; display: block; }
+  .user-cell span { font-size: 11px; color: #888; }
+
+  .section { display: none; }
+  .section.active { display: block; }
+  .total-row { background: #f2f6f3 !important; font-weight: 700; }
+  .total-row td { border-top: 2px solid #d0d8e4 !important; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="header-brand">
+    {% if settings.logo_data %}<img src="{{ settings.logo_data }}" class="header-logo" alt="logo">{% endif %}
+    <h1>📊 لوحة تقارير الأدمن</h1>
+  </div>
+  <a href="/logout">خروج ↩</a>
+</div>
+
+<div class="container">
+
+  <div class="view-tabs">
+    <button class="view-tab active" onclick="showView('overall')">📈 التقرير الإجمالي</button>
+    <button class="view-tab" onclick="showView('daily')">📅 التقارير اليومية</button>
+  </div>
+
+  <!-- ══════════════ التقرير الإجمالي ══════════════ -->
+  <div id="view-overall" class="section active">
+
+    <div class="card">
+      <h2>📊 إحصائيات الفترة كاملة ({{ START_DATE.strftime('%d/%m') }} – {{ END_DATE.strftime('%d/%m/%Y') }})</h2>
+      <div class="summary-grid">
+        {% for opt in options %}
+        <div class="stat-box" style="border-color:{{ opt.color }}33;">
+          <div class="stat-num" style="color:{{ opt.color }}">
+            {% set total = 0 %}
+            {% for u in report %}{% set total = total + u.totals.get(opt.code, 0) %}{% endfor %}
+            {{ total }}
+          </div>
+          <div class="stat-lbl">{{ opt.label }}</div>
+        </div>
+        {% endfor %}
+        <div class="stat-box">
+          <div class="stat-num" style="color:#aaa">{{ report|sum(attribute='total_missing') }}</div>
+          <div class="stat-lbl">❌ ناقص</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>👥 تفاصيل كل أسرة</h2>
+      {% for user in report %}
+      <div class="user-summary-card">
+        <div class="user-header">
+          <span class="user-name">👤 {{ user.parent_name }}</span>
+          <span class="child-tag">📿 {{ user.child_name }}</span>
+          <div class="badges">
+            {% for opt in options %}
+              {% if user.totals.get(opt.code, 0) > 0 %}
+                <span class="badge" style="background:{{ opt.color }}">{{ opt.label }}: {{ user.totals.get(opt.code, 0) }}</span>
+              {% endif %}
+            {% endfor %}
+            <span class="badge pct">{{ user.completion_pct }}%</span>
+          </div>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill"
+               style="width: {{ user.completion_pct }}%;
+                      background: {% if user.completion_pct >= 80 %}#28a745{% elif user.completion_pct >= 50 %}#ffc107{% else %}#dc3545{% endif %}">
+          </div>
+        </div>
+        <div class="days-mini">
+          {% for day in user.days %}
+            {% set total_w = wirds|length %}
+            {% set done = day.counts.values()|sum %}
+            {% set ada2 = day.counts.get('ada2', 0) %}
+            {% if done == 0 %}{% set dc = 'empty' %}
+            {% elif ada2 == total_w %}{% set dc = 'complete' %}
+            {% else %}{% set dc = 'partial' %}{% endif %}
+            <div class="day-mini {{ dc }}">
+              <div class="dm-name">{{ day.date.strftime('%a')|replace('Mon','الاثنين')|replace('Tue','الثلاثاء')|replace('Wed','الأربعاء')|replace('Thu','الخميس')|replace('Fri','الجمعة')|replace('Sat','السبت')|replace('Sun','الأحد') }}</div>
+              <div class="dm-date">{{ day.date.strftime('%d/%m') }}</div>
+              {% if done > 0 %}
+                <div style="font-weight:700;margin-top:3px;">{{ ada2 }}/{{ total_w }}</div>
+              {% else %}
+                <div style="color:#ccc;font-size:12px;margin-top:4px;">—</div>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+      {% if not report %}
+        <p style="text-align:center; color:#888; padding:30px;">مفيش أولياء أمور لسه</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- ══════════════ التقارير اليومية ══════════════ -->
+  <div id="view-daily" class="section">
+
+    <div class="day-tabs">
+      {% for day_report in daily_reports %}
+      <button class="day-tab {% if loop.first %}active{% endif %}" onclick="showDay('day-{{ loop.index }}', this)">
+        <div class="dt-name">{{ day_report.date.strftime('%A')|replace('Monday','الاثنين')|replace('Tuesday','الثلاثاء')|replace('Wednesday','الأربعاء')|replace('Thursday','الخميس')|replace('Friday','الجمعة')|replace('Saturday','السبت')|replace('Sunday','الأحد') }}</div>
+        <div class="dt-date">{{ day_report.date.strftime('%d/%m') }}</div>
+      </button>
+      {% endfor %}
+    </div>
+
+    {% for day_report in daily_reports %}
+    <div id="day-{{ loop.index }}" class="day-section" style="{% if not loop.first %}display:none{% endif %}">
+      <div class="card">
+        <h2>📅 {{ day_report.date.strftime('%A')|replace('Monday','الاثنين')|replace('Tuesday','الثلاثاء')|replace('Wednesday','الأربعاء')|replace('Thursday','الخميس')|replace('Friday','الجمعة')|replace('Saturday','السبت')|replace('Sunday','الأحد') }} {{ day_report.date.strftime('%d/%m/%Y') }}</h2>
+
+        <div class="summary-grid" style="margin-bottom:16px;">
+          {% for opt in options %}
+          <div class="stat-box">
+            <div class="stat-num" style="color:{{ opt.color }}">{{ day_report.totals.get(opt.code, 0) }}</div>
+            <div class="stat-lbl">{{ opt.label }}</div>
+          </div>
+          {% endfor %}
+        </div>
+
+        <div style="overflow-x:auto;">
+          <table class="daily-table">
+            <thead>
+              <tr>
+                <th style="min-width:140px;">الأسرة</th>
+                {% for wird in wirds %}
+                <th style="min-width:55px;font-size:10px;">{{ wird.name[:10] }}{% if wird.name|length > 10 %}…{% endif %}</th>
+                {% endfor %}
+                <th>الإجمالي</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for ud in day_report.users %}
+              <tr>
+                <td class="user-cell">
+                  <strong>{{ ud.parent_name }}</strong>
+                  <span>📿 {{ ud.child_name }}</span>
+                </td>
+                {% for wird in wirds %}
+                  {% set st = ud.records.get(wird.id, '') %}
+                  {% set opt_match = options|selectattr('code','equalto', st)|first %}
+                  <td>
+                    {% if opt_match %}
+                      <span style="color:{{ opt_match.color }};font-size:16px;">●</span>
+                    {% else %}
+                      <span style="color:#ddd;">—</span>
+                    {% endif %}
+                  </td>
+                {% endfor %}
+                <td style="font-size:11px;">
+                  {% for opt in options %}
+                    {% if ud.counts.get(opt.code, 0) > 0 %}
+                      <span style="color:{{ opt.color }};font-weight:700;">{{ ud.counts.get(opt.code, 0) }}</span>
+                    {% endif %}
+                  {% endfor %}
+                </td>
+              </tr>
+              {% endfor %}
+              <tr class="total-row">
+                <td>📊 الإجمالي</td>
+                {% for wird in wirds %}
+                  {% set w_done = day_report.users|selectattr('records.' ~ wird.id, 'defined')|list|length %}
+                  <td style="font-size:11px;color:#555;">{{ w_done }}/{{ day_report.users|length }}</td>
+                {% endfor %}
+                <td>{{ day_report.users|length }} أسرة</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+
+  </div>
+
+</div>
+
+<script>
+function showView(view) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.view-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('view-' + view).classList.add('active');
+  event.target.classList.add('active');
+}
+function showDay(dayId, btn) {
+  document.querySelectorAll('.day-section').forEach(s => s.style.display = 'none');
+  document.querySelectorAll('.day-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(dayId).style.display = 'block';
+  btn.classList.add('active');
+}
+</script>
+</body>
+</html>
